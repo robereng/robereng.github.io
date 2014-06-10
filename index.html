@@ -1,249 +1,280 @@
 <!doctype html>
 <html>
-	<head>
-		<meta charset="utf-8" />
-		<title>Sample Three.js</title>
-		<style>
-			body {
-				background-color: #FFF;
-				margin: 0px;
-			}
-		</style>
-	</head>
-	<body></body>
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
-	<script src="js/three.js"></script>
-	<script src="js/OrbitControls.js"></script>
 
-	 <script id="vertexShader" type="x-shader/x-vertex">
+<head>
+    <meta charset="utf-8" />
+    <title>Rob Reng Portfolio</title>
+    <link href='http://fonts.googleapis.com/css?family=Raleway' rel='stylesheet' type='text/css'>
+    <style>
+    body {
+        background-color: #FFF;
+        margin: 0px;
+    }
+    .intro {
+        font-family:'Raleway', sans-serif;
+        width: 750px;
+        margin: 0 auto;
+    }
+    </style>
+</head>
 
-      varying vec2 vUv;
+<body>
+    <div class="intro">
+        <p>The portfolio is coming soon. In the meantime, click, hold and drag your mouse to move the TV.</p>
+    </div>
+</body>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+<script src="js/three.js"></script>
+<script src="js/OrbitControls.js"></script>
 
-      void main()
-      {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-      }
+<script id="vertexShader" type="x-shader/x-vertex">
+varying vec2 vUv;
 
-    </script>
-    <script id="fragment_shader_film" type="x-shader/x-fragment">
+void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+</script>
+<script id="fragment_shader_film" type="x-shader/x-fragment">
+// control parameter
+uniform float time;
 
-		// control parameter
-		uniform float time;
+uniform bool grayscale;
 
-		uniform bool grayscale;
+// noise effect intensity value (0 = no effect, 1 = full effect)
+uniform float nIntensity;
 
-		// noise effect intensity value (0 = no effect, 1 = full effect)
-		uniform float nIntensity;
+// scanlines effect intensity value (0 = no effect, 1 = full effect)
+uniform float sIntensity;
 
-		// scanlines effect intensity value (0 = no effect, 1 = full effect)
-		uniform float sIntensity;
+// scanlines effect count value (0 = no effect, 4096 = full effect)
+uniform float sCount;
 
-		// scanlines effect count value (0 = no effect, 4096 = full effect)
-		uniform float sCount;
+uniform sampler2D tDiffuse;
 
-		uniform sampler2D tDiffuse;
+varying vec2 vUv;
 
-		varying vec2 vUv;
+void main() {
 
-		void main() {
+    // sample the source
+    vec4 cTextureScreen = texture2D(tDiffuse, vUv);
 
-			// sample the source
-			vec4 cTextureScreen = texture2D( tDiffuse, vUv );
+    // make some noise
+    float x = vUv.x * vUv.y * time * 1000.0;
+    x = mod(x, 13.0) * mod(x, 123.0);
+    float dx = mod(x, 0.01);
 
-			// make some noise
-			float x = vUv.x * vUv.y * time *  1000.0;
-			x = mod( x, 13.0 ) * mod( x, 123.0 );
-			float dx = mod( x, 0.01 );
+    // add noise
+    vec3 cResult = cTextureScreen.rgb + cTextureScreen.rgb * clamp(0.1 + dx * 100.0, 0.0, 1.0);
 
-			// add noise
-			vec3 cResult = cTextureScreen.rgb + cTextureScreen.rgb * clamp( 0.1 + dx * 100.0, 0.0, 1.0 );
+    // get us a sine and cosine
+    vec2 sc = vec2(sin(vUv.y * sCount), cos(vUv.y * sCount));
 
-			// get us a sine and cosine
-			vec2 sc = vec2( sin( vUv.y * sCount ), cos( vUv.y * sCount ) );
+    // add scanlines
+    cResult += cTextureScreen.rgb * vec3(sc.x, sc.y, sc.x) * sIntensity;
 
-			// add scanlines
-			cResult += cTextureScreen.rgb * vec3( sc.x, sc.y, sc.x ) * sIntensity;
+    // interpolate between source and result by intensity
+    cResult = cTextureScreen.rgb + clamp(nIntensity, 0.0, 1.0) * (cResult - cTextureScreen.rgb);
 
-			// interpolate between source and result by intensity
-			cResult = cTextureScreen.rgb + clamp( nIntensity, 0.0,1.0 ) * ( cResult - cTextureScreen.rgb );
+    // convert to grayscale if desired
+    if (grayscale) {
 
-			// convert to grayscale if desired
-			if( grayscale ) {
+        cResult = vec3(cResult.r * 0.3 + cResult.g * 0.59 + cResult.b * 0.11);
 
-				cResult = vec3( cResult.r * 0.3 + cResult.g * 0.59 + cResult.b * 0.11 );
+    }
 
-			}
+    gl_FragColor = vec4(cResult, cTextureScreen.a);
 
-			gl_FragColor =  vec4( cResult, cTextureScreen.a );
+}
+</script>
 
-		}
-    </script>
+<script id="fragment_shader_interference" type="x-shader/x-fragment">
+uniform float time;
+uniform vec2 resolution;
 
-    <script id="fragment_shader_interference" type="x-shader/x-fragment">
-    	uniform float time;
-    	uniform vec2 resolution;
+float rand(vec2 co) {
+    return fract(sin(dot(co.xy, vec2(.998, 15.233))) * 428.5453);
+}
 
-		float rand(vec2 co){
-		  return fract(sin(dot(co.xy ,vec2(.998,15.233))) * 428.5453);
-		}
+void main() {
 
-		void main() {
+    vec2 position = (gl_FragCoord.xy / resolution.xy);
 
-			vec2 position = ( gl_FragCoord.xy / resolution.xy );
-			
-			vec2 pos = mod(position, 5.0);
-			float a = rand(pos * mod(time,10.0));
-			
-			gl_FragColor = vec4(a, a, a, .0001);//rand(position * sin(time/100.0)), 1.0, 1.0);//sin(pos.x), .0);
-		}
+    vec2 pos = mod(position, 5.0);
+    float a = rand(pos * mod(time, 10.0));
 
-    </script>
+    gl_FragColor = vec4(a, a, a, .0001); //rand(position * sin(time/100.0)), 1.0, 1.0);//sin(pos.x), .0);
+}
+</script>
 
-	<script type="text/javascript">
+<script type="text/javascript">
+var renderer, camera, controls, scene, tvMesh, objMesh, composer;
 
-	var renderer, camera, controls, scene, tvMesh, objMesh, composer;
+var video, videoImage, videoImageContext, videoTexture;
 
-	var video, videoImage, videoImageContext, videoTexture;
+var uniforms1, uniforms2;
 
-	var uniforms1, uniforms2;
+var clock = new THREE.Clock();
 
-    var clock = new THREE.Clock();
+init();
+animate();
 
-	init();
-	animate();
+function init() {
 
-	function init(){
+    // create the scene
+    scene = new THREE.Scene();
 
-		// create the scene
-		scene = new THREE.Scene();
-
-		// create the renderer
-		renderer = new THREE.WebGLRenderer();
-		renderer.setSize(window.innerWidth, window.innerHeight);
-		document.body.appendChild(renderer.domElement);
-
-		
-		// create and add the camera
-		camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 1000 );
-		// the camera starts at 0,0,0 so pull it back
-		camera.position.z = 300;
-		scene.add(camera);
-
-		// add in the orbit controls
-		controls = new THREE.OrbitControls( camera );
-  		controls.addEventListener( 'change', render );
-
-		// create the video element
-		video = document.createElement( 'video' );
-		video.src = "moonwalk.mp4";
-		video.load(); // must call after setting/changing source
-		video.play();
-
-		videoImage = document.createElement( 'canvas' );
-		videoImage.width = 480;
-		videoImage.height = 360;
-
-		videoImageContext = videoImage.getContext( '2d' );
-		videoImageContext.fillStyle = '#000000';
-		videoImageContext.fillRect( 0, 0, videoImage.width, videoImage.height );
-
-		videoTexture = new THREE.Texture( videoImage );
-		videoTexture.minFilter = THREE.LinearFilter;
-		videoTexture.magFilter = THREE.LinearFilter;
+    // create the renderer
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
 
-		//var tvMaterial = new THREE.MeshBasicMaterial( { map: videoTexture, overdraw: true, side:THREE.DoubleSide});
-		// create a new mesh with plane geometry -
-		/*tvMesh = new THREE.Mesh(
+    // create and add the camera
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+    // the camera starts at 0,0,0 so pull it back
+    camera.position.z = 300;
+    scene.add(camera);
+
+    // add in the orbit controls
+    controls = new THREE.OrbitControls(camera);
+    controls.addEventListener('change', render);
+
+    // create the video element
+    video = document.createElement('video');
+    video.src = "moonwalk.mp4";
+    video.load(); // must call after setting/changing source
+    video.play();
+
+    videoImage = document.createElement('canvas');
+    videoImage.width = 480;
+    videoImage.height = 360;
+
+    videoImageContext = videoImage.getContext('2d');
+    videoImageContext.fillStyle = '#000000';
+    videoImageContext.fillRect(0, 0, videoImage.width, videoImage.height);
+
+    videoTexture = new THREE.Texture(videoImage);
+    videoTexture.minFilter = THREE.LinearFilter;
+    videoTexture.magFilter = THREE.LinearFilter;
+
+
+    //var tvMaterial = new THREE.MeshBasicMaterial( { map: videoTexture, overdraw: true, side:THREE.DoubleSide});
+    // create a new mesh with plane geometry -
+    /*tvMesh = new THREE.Mesh(
 		   new THREE.PlaneGeometry(480, 360),
 		   new THREE.MeshBasicMaterial( { map: videoTexture, overdraw: true, side:THREE.DoubleSide}) );
 
 		// add the sphere to the scene
 		scene.add(tvMesh);*/
 
-		uniforms1 = {
-            time: { type: "f", value: 0.1 },
-            resolution: { type: "v2", value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
-          };
+    uniforms1 = {
+        time: {
+            type: "f",
+            value: 0.1
+        },
+        resolution: {
+            type: "v2",
+            value: new THREE.Vector2(window.innerWidth, window.innerHeight)
+        }
+    };
 
-		uniforms2 = {
-            tDiffuse: { type: "t", value: videoTexture },
-            time: { type: "f", value: 0.0 },
-            nIntensity: { type: "f", value: 0.5 },
-            sIntensity: { type: "f", value: 0.05 }, 
-            sCount:     { type: "f", value: 4096 },
-            grayscale:  { type: "i", value: 1 }
-          };
+    uniforms2 = {
+        tDiffuse: {
+            type: "t",
+            value: videoTexture
+        },
+        time: {
+            type: "f",
+            value: 0.0
+        },
+        nIntensity: {
+            type: "f",
+            value: 0.5
+        },
+        sIntensity: {
+            type: "f",
+            value: 0.05
+        },
+        sCount: {
+            type: "f",
+            value: 4096
+        },
+        grayscale: {
+            type: "i",
+            value: 1
+        }
+    };
 
-        var sMaterial = new THREE.ShaderMaterial( {
-            uniforms: uniforms2,
-            vertexShader: document.getElementById( 'vertexShader' ).textContent,
-            fragmentShader: document.getElementById('fragment_shader_film').textContent
-            } );
+    var sMaterial = new THREE.ShaderMaterial({
+        uniforms: uniforms2,
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragment_shader_film').textContent
+    });
 
-        var iMaterial = new THREE.ShaderMaterial( {
-            uniforms: uniforms1,
-            vertexShader: document.getElementById( 'vertexShader' ).textContent,
-            fragmentShader: document.getElementById('fragment_shader_interference').textContent
-            } );
+    var iMaterial = new THREE.ShaderMaterial({
+        uniforms: uniforms1,
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragment_shader_interference').textContent
+    });
 
-        
-        //tvMesh = new THREE.Mesh( new THREE.PlaneGeometry(480, 360), tvMaterial );
-        //tvMesh = THREE.SceneUtils.createMultiMaterialObject(new THREE.PlaneGeometry(480, 360), [iMaterial, tvMaterial]);
 
-		// add the sphere to the scene
-		//scene.add(tvMesh);
+    //tvMesh = new THREE.Mesh( new THREE.PlaneGeometry(480, 360), tvMaterial );
+    //tvMesh = THREE.SceneUtils.createMultiMaterialObject(new THREE.PlaneGeometry(480, 360), [iMaterial, tvMaterial]);
 
-		//Add an object!
-		var loader = new THREE.JSONLoader(), 
-		callbackModel = function( geometry, materials ) { 
-				objMesh = new THREE.Mesh( geometry, new THREE.MeshFaceMaterial(materials) ); 
-				objMesh.position.set( 0, -100, 0 ); 
-				objMesh.scale.set( 0.5, 0.5, 0.5 );
-				objMesh.rotation.x = - Math.PI / 2;
-				objMesh.material.materials[2] = sMaterial;
-				objMesh.material.materials[1].shininess = 20;
-				objMesh.material.materials[1].shading = THREE.SmoothShading;
-				objMesh.material.materials[6].shininess = 20;
-				objMesh.material.materials[6].shading = THREE.SmoothShading;
-				scene.add( objMesh ); 
-		}; 
-		loader.load( 'obj/retrotv.js', callbackModel);
+    // add the sphere to the scene
+    //scene.add(tvMesh);
 
-		// add subtle ambient lighting
-		var ambientLight = new THREE.AmbientLight(0xffffff);
-		scene.add(ambientLight);
+    //Add an object!
+    var loader = new THREE.JSONLoader(),
+        callbackModel = function(geometry, materials) {
+            objMesh = new THREE.Mesh(geometry, new THREE.MeshFaceMaterial(materials));
+            objMesh.position.set(0, -100, 0);
+            objMesh.scale.set(0.5, 0.5, 0.5);
+            objMesh.rotation.x = -Math.PI / 2;
+            objMesh.material.materials[2] = sMaterial;
+            objMesh.material.materials[1].shininess = 20;
+            objMesh.material.materials[1].shading = THREE.SmoothShading;
+            objMesh.material.materials[6].shininess = 20;
+            objMesh.material.materials[6].shading = THREE.SmoothShading;
+            scene.add(objMesh);
+        };
+    loader.load('obj/retrotv.js', callbackModel);
 
-		// directional lighting
-		var directionalLight = new THREE.DirectionalLight(0xffffff);
-		directionalLight.position.set(1, 1, 1).normalize();
-		scene.add(directionalLight);
+    // add subtle ambient lighting
+    var ambientLight = new THREE.AmbientLight(0xffffff);
+    scene.add(ambientLight);
 
-	}
+    // directional lighting
+    var directionalLight = new THREE.DirectionalLight(0xffffff);
+    directionalLight.position.set(1, 1, 1).normalize();
+    scene.add(directionalLight);
 
-	function animate() {
+}
 
-		requestAnimationFrame( animate );
-		render();
+function animate() {
 
-	}
+    requestAnimationFrame(animate);
+    render();
 
-	// draw!
-	function render(){
+}
 
-		if ( video.readyState === video.HAVE_ENOUGH_DATA ) 
-		{
-			videoImageContext.drawImage( video, 0, 0 );
-			if ( videoTexture ) 
-				videoTexture.needsUpdate = true;
-		}
+// draw!
 
-		var delta = clock.getDelta();
+function render() {
 
-        uniforms2.time.value = clock.elapsedTime;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        videoImageContext.drawImage(video, 0, 0);
+        if (videoTexture)
+            videoTexture.needsUpdate = true;
+    }
 
-		renderer.render(scene, camera);
-	}
-	</script>
+    var delta = clock.getDelta();
+
+    uniforms2.time.value = clock.elapsedTime;
+
+    renderer.render(scene, camera);
+}
+</script>
+
 </html>
